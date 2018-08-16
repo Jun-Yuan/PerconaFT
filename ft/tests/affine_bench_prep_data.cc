@@ -43,7 +43,7 @@ Copyright (c) 2006, 2015, Percona and/or its affiliates. All rights reserved.
 static TOKUTXN const null_txn = 0;
 static size_t valsize = 4*1024; 
 static size_t keysize = 1024/8; //1k
-static const size_t numrows = 8*1024*1024/5; 
+static const size_t numrows = 4*1024*1024/5; 
 static double epsilon = 0.5;  
 static size_t nodesize;
 static size_t basementsize;
@@ -117,7 +117,7 @@ int test_main(int argc, const char *argv[]) {
   basementsize = nodesize / fanout;
   printf("Benchmarking fractal tree based on nodesize = %zu bytes(%lfMBs) \n "
          "\t key: %zu bytes (%zu KBs); value: %zu bytes (%zu KBs) \n\t B = "
-         "%zu, epsilon=0.5, fanout = %d\n Preparing 8 GBs data...\n",
+         "%zu, epsilon=0.5, fanout = %d\n Preparing 4 GBs data...\n",
          nodesize, nodeMB, keysize * 8, (keysize * 8) / 1024, valsize,
          valsize / 1024, B, fanout);
 
@@ -125,7 +125,8 @@ int test_main(int argc, const char *argv[]) {
   const char *n = "affine_benchmark_data";
   int r;
   unlink(n);
-  toku_cachetable_create(&ct, 1024*1024*1024, ZERO_LSN, nullptr);
+  //toku_cachetable_create(&ct, 1024*1024*1024, ZERO_LSN, nullptr);
+  toku_cachetable_create(&ct, 0, ZERO_LSN, nullptr);
   r = toku_open_ft_handle(n, 1, &t, nodesize, basementsize, TOKU_NO_COMPRESSION,
                           ct, null_txn, uint64_dbt_cmp);
   assert(r == 0);

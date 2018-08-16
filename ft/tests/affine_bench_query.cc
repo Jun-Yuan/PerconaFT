@@ -39,11 +39,11 @@ Copyright (c) 2006, 2015, Percona and/or its affiliates. All rights reserved.
 #include <stdio.h>
 #include "cachetable/checkpoint.h"
 #include "test.h"
-#define NUM_QUERY_THREADS 1
+#define NUM_QUERY_THREADS 8
 static TOKUTXN const null_txn = 0;
 static size_t valsize = 4*1024;
 static size_t keysize = 1024/8;
-static size_t numrows = 8*1024*1024/5;
+static size_t numrows = 4*1024*1024/5;
 static double epsilon = 0.5;  
 static size_t nodesize;
 static size_t basementsize;

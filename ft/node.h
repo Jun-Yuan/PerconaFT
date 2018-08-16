@@ -286,7 +286,7 @@ public:
   QF &bloom_filter() { return _header._filter; }
 
   void create_bloom_filter() {
-    const uint64_t _qbits = 10;
+    const uint64_t _qbits = 14;
     const uint64_t _nhashbits = _qbits + 8;
     const uint64_t _nslots = (1ULL << _qbits);
     qf_malloc(&_header._filter, _nslots, _nhashbits, 0, LOCKS_FORBIDDEN,
