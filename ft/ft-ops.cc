@@ -665,7 +665,7 @@ void toku_ftnode_clone_callback(void *value_data,
              node->n_children() *
                  sizeof((cloned_node->children_blocknum())[0]));
       cloned_node->broadcast_list().clone(&node->broadcast_list());
-      cloned_node->create_bloom_filter();
+      cloned_node->create_bloom_filter(node->bloom_filter().metadata->nslots);
       cloned_node->clone_bloom_filter(&node->bloom_filter());
     }
     XMALLOC_N(node->n_children(), cloned_node->bp());

@@ -285,10 +285,14 @@ public:
 
   QF &bloom_filter() { return _header._filter; }
 
-  void create_bloom_filter() {
-    const uint64_t _qbits = 14;
+  void create_bloom_filter(uint64_t nslots = 0) {
+    const uint64_t _qbits = 10;
     const uint64_t _nhashbits = _qbits + 8;
-    const uint64_t _nslots = (1ULL << _qbits);
+    uint64_t _nslots;
+    if (nslots == 0)
+      _nslots = (1ULL << _qbits);
+    else
+      _nslots = nslots;
     qf_malloc(&_header._filter, _nslots, _nhashbits, 0, LOCKS_FORBIDDEN,
               DEFAULT, 0);
     qf_set_auto_resize(&_header._filter);

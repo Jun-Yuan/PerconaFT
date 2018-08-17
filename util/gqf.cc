@@ -2065,9 +2065,10 @@ bool qf_iterator(const QF *qf, QFi *qfi, uint64_t position)
 		uint64_t block_index = position;
 		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
 		if (idx == 64) {
-			while(idx == 64 && block_index < qf->metadata->nblocks) {
-				idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+			while(idx == 64 && block_index < qf->metadata->nblocks-1) {
 				block_index++;
+				idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
+
 			}
 		}
 		position = block_index * SLOTS_PER_BLOCK + idx;
@@ -2149,7 +2150,7 @@ bool qf_iterator_hash(const QF *qf, QFi *qfi, uint64_t hash)
 		uint64_t block_index = position / SLOTS_PER_BLOCK;
 		uint64_t idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
 		if (idx == 64) {
-			while(idx == 64 && block_index < qf->metadata->nblocks) {
+			while(idx == 64 && block_index < qf->metadata->nblocks-1) {
 				block_index++;
 				idx = bitselect(get_block(qf, block_index)->occupieds[0], 0);
 			}
@@ -2216,7 +2217,7 @@ int qfi_next(QFi *qfi)
 																		rank);
 			if (next_run == 64) {
 				rank = 0;
-				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks) {
+				while (next_run == 64 && block_index < qfi->qf->metadata->nblocks-1) {
 					block_index++;
 					next_run = bitselect(get_block(qfi->qf, block_index)->occupieds[0],
 															 rank);
