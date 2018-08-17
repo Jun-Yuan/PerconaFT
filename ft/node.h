@@ -298,9 +298,11 @@ public:
     qf_set_auto_resize(&_header._filter);
   }
 
-  void destroy_bloom_filter() { 
-   QF * qf = &_header._filter;
-	qf_free(qf);
+  void destroy_bloom_filter() {
+    QF *qf = &_header._filter;
+    if (qf->metadata == NULL)
+      return;
+    qf_free(qf);
   }
 
   uint32_t serialize_bloom_filter_to_wbuf(struct wbuf *wb) {

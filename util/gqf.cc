@@ -1759,6 +1759,8 @@ void qf_copy(QF *dest, const QF *src)
 	DEBUG_CQF("%s\n","Source CQF");
 	DEBUG_DUMP(src);
 	memcpy(dest->runtimedata, src->runtimedata, sizeof(qfruntime));
+	dest->runtimedata->f_info.filepath = NULL;
+	dest->runtimedata->locks = NULL;
 	memcpy(dest->metadata, src->metadata, sizeof(qfmetadata));
 	memcpy(dest->blocks, src->blocks, src->metadata->total_size_in_bytes);
 	DEBUG_CQF("%s\n","Destination CQF after copy.");
