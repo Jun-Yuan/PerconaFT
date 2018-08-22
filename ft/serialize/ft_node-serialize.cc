@@ -762,7 +762,8 @@ int toku_serialize_ftnode_to_memory(FTNODE node,
     uint32_t total_node_size = (serialize_node_header_size(node) // uncompressed header
                                  + sb_node_info.compressed_size   // compressed nodeinfo (without its checksum)
                                  + 4);                            // nodeinfo's checksum
-    *n_bytes_header = total_node_size; 
+    *n_bytes_header = roundup_to_multiple(512, total_node_size+8); //two extra int32_t to store compressed size
+								   //and uncompressed size 
     uint32_t total_uncompressed_size = (serialize_node_header_size(node) // uncompressed header
                                  + sb_node_info.uncompressed_size   // uncompressed nodeinfo (without its checksum)
                                  + 4);                            // nodeinfo's checksum
