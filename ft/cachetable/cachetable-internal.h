@@ -177,6 +177,8 @@ struct ctpair {
     CACHETABLE_FLUSH_CALLBACK flush_callback;
     CACHETABLE_PARTIAL_EVICTION_EST_CALLBACK pe_est_callback;
     CACHETABLE_PARTIAL_EVICTION_CALLBACK pe_callback;
+    CACHETABLE_PARTIAL_EVICTION_KH_CALLBACK pe_kh_callback;
+    CACHETABLE_PARTIAL_EVICTION_KH_EST_CALLBACK pe_kh_est_callback;
     CACHETABLE_CLEANER_CALLBACK cleaner_callback;
     CACHETABLE_CLONE_CALLBACK clone_callback;
     CACHETABLE_CHECKPOINT_COMPLETE_CALLBACK checkpoint_complete_callback;
@@ -470,6 +472,7 @@ public:
     void release_reserved_memory(uint64_t reserved_memory);
     void run_eviction_thread();
     void do_partial_eviction(PAIR p);
+    void do_eviction_keep_header(PAIR p);
     void evict_pair(PAIR p, bool checkpoint_pending);
     void wait_for_cache_pressure_to_subside();
     void signal_eviction_thread();

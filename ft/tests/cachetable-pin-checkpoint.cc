@@ -48,8 +48,8 @@ Copyright (c) 2006, 2015, Percona and/or its affiliates. All rights reserved.
 
 // The arrays
 
-#define NUM_ELEMENTS 100
-#define NUM_MOVER_THREADS 4
+#define NUM_ELEMENTS 5
+#define NUM_MOVER_THREADS 1
 
 int64_t data[NUM_ELEMENTS];
 int64_t checkpointed_data[NUM_ELEMENTS];
@@ -298,6 +298,7 @@ static void *checkpoints(void *arg) {
         //
         CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
         toku_cachetable_begin_checkpoint(cp, NULL);    
+        if (verbose) printf("begin chkpt\n");
         toku_cachetable_end_checkpoint(
             cp, 
             NULL, 
@@ -305,12 +306,14 @@ static void *checkpoints(void *arg) {
             NULL
             );
         assert (sum==0);
+        if (verbose) printf("end chkpt\n");
         for (int i = 0; i < NUM_ELEMENTS; i++) {
             sum += checkpointed_data[i];
         }
         assert (sum==0);
         usleep(10*1024);
         num_checkpoints++;
+        if (verbose) printf("num_checkpoints = %d\n", num_checkpoints);
     }
     return arg;
 }
@@ -351,7 +354,7 @@ cachetable_test (void) {
         data[i] = 0;
         checkpointed_data[i] = 0;
     }
-    time_of_test = 30;
+    time_of_test = 5;
 
     int r;
     

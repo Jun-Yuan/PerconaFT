@@ -40,7 +40,6 @@ Copyright (c) 2006, 2015, Percona and/or its affiliates. All rights reserved.
 #include "cachetable/checkpoint.h"
 #include "test.h"
 #define NUM_QUERY_THREADS 8
-//#define NUM_QUERY_THREADS 1
 static TOKUTXN const null_txn = 0;
 static size_t valsize = 4*1024;
 static size_t keysize = 1024/8;
@@ -50,8 +49,8 @@ static size_t nodesize;
 static size_t basementsize;
 static FT_HANDLE t;
 static CACHETABLE ct;
-static size_t random_numbers = numrows/(1024);
-//static size_t random_numbers = 1;
+static size_t query_rows = numrows/(1024);
+static size_t random_numbers;
 typedef uint64_t __attribute__((__may_alias__)) uint64_t_a;
 static int uint64_dbt_cmp (DB *db, const DBT *a, const DBT *b) {
   assert(db && a && b);
@@ -85,6 +84,13 @@ static void randomize(uint64_t *array) {
     array[i] = (random() << 32 | random()) % numrows;
   }
 }
+static void randomize2(uint64_t *array) {
+  srand(14218);
+  for (uint64_t i = 0; i < random_numbers; i++) {
+    array[i] = (random() << 32 | random()) % numrows;
+  }
+}
+
 
 static void * random_query(void *arg) {
    char val[valsize];
@@ -140,6 +146,8 @@ test_main(int argc, const char *argv[]) {
     r = toku_open_ft_handle(n, 0, &t, nodesize, basementsize, TOKU_NO_COMPRESSION, ct, null_txn, uint64_dbt_cmp); assert(r==0);
     toku_ft_handle_set_fanout(t, fanout);
     toku_ft_set_direct_io(true);
+    size_t warmup = 4*(4*1024) /nodeMB;
+    random_numbers = warmup > query_rows? warmup:query_rows ; 
     uint64_t *array = (uint64_t *)toku_malloc(sizeof(uint64_t) * random_numbers);
     if (array == NULL) {
        fprintf(stderr, "Allocate memory failed\n");
@@ -147,8 +155,26 @@ test_main(int argc, const char *argv[]) {
     }
     randomize(array); 
     toku_pthread_t query_tid[NUM_QUERY_THREADS];
+    //warm up cache
+    for (int i = 0; i < NUM_QUERY_THREADS; i++) {
+	uint64_t * args = array + i* (random_numbers/NUM_QUERY_THREADS);
+        r = toku_pthread_create(toku_uninstrumented,
+                                &query_tid[i],
+                                nullptr,
+                                random_query,
+                                args);
+        assert_zero(r);
+    }
+    for (int i = 0; i < NUM_QUERY_THREADS; i++) {
+        void * ret;
+        r = toku_pthread_join(query_tid[i], &ret); 
+        assert_zero(r);
+    }
+    random_numbers = query_rows;
+    randomize2(array); 
+    //now start timing 
     r = system("blktrace -w 30 -d /dev/sdb -o sdb &");
-    CKERR(r);  
+    CKERR(r); 
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (int i = 0; i < NUM_QUERY_THREADS; i++) {
 	uint64_t * args = array + i* (random_numbers/NUM_QUERY_THREADS);

@@ -221,6 +221,9 @@ typedef int (*CACHETABLE_FETCH_CALLBACK)(CACHEFILE, PAIR p, int fd, CACHEKEY key
 // If cost is PE_CHEAP, then the callback does not set bytes_freed_estimate.
 typedef void (*CACHETABLE_PARTIAL_EVICTION_EST_CALLBACK)(void *ftnode_pv, void* disk_data, long* bytes_freed_estimate, enum partial_eviction_cost *cost, void *write_extraargs);
 
+typedef void (*CACHETABLE_PARTIAL_EVICTION_KH_EST_CALLBACK)(void *ftnode_pv, void * disk_data, long* bytes_freed_estimate, void *write_extraargs);
+
+
 // The cachetable calls the partial eviction callback is to possibly try and partially evict pieces
 // of the PAIR. The callback determines the strategy for what to evict. The callback may choose to free
 // nothing, or may choose to free as much as possible. When the partial eviction callback is finished,
@@ -232,6 +235,9 @@ typedef void (*CACHETABLE_PARTIAL_EVICTION_EST_CALLBACK)(void *ftnode_pv, void* 
 // on exit, the finalize continuation is called
 typedef int (*CACHETABLE_PARTIAL_EVICTION_CALLBACK)(void *ftnode_pv, PAIR_ATTR old_attr, void *write_extraargs,
                                                     void (*finalize)(PAIR_ATTR new_attr, void *extra), void *finalize_extra);
+typedef int (*CACHETABLE_PARTIAL_EVICTION_KH_CALLBACK)(void *ftnode_pv, PAIR_ATTR old_attr, void *write_extraargs,
+                                                    void (*finalize)(PAIR_ATTR new_attr, void *extra), void *finalize_extra);
+
 
 // The cachetable calls this function to determine if get_and_pin call requires a partial fetch. If this function returns true, 
 // then the cachetable will subsequently call CACHETABLE_PARTIAL_FETCH_CALLBACK to perform
@@ -266,7 +272,9 @@ typedef void (*CACHETABLE_CHECKPOINT_COMPLETE_CALLBACK)(void *value_data);
 typedef struct {
     CACHETABLE_FLUSH_CALLBACK flush_callback;
     CACHETABLE_PARTIAL_EVICTION_EST_CALLBACK pe_est_callback;
+    CACHETABLE_PARTIAL_EVICTION_KH_EST_CALLBACK pe_kh_est_callback;
     CACHETABLE_PARTIAL_EVICTION_CALLBACK pe_callback; 
+    CACHETABLE_PARTIAL_EVICTION_KH_CALLBACK pe_kh_callback; 
     CACHETABLE_CLEANER_CALLBACK cleaner_callback;
     CACHETABLE_CLONE_CALLBACK clone_callback;
     CACHETABLE_CHECKPOINT_COMPLETE_CALLBACK checkpoint_complete_callback;

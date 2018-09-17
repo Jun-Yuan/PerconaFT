@@ -867,6 +867,47 @@ void toku_ft_set_compress_buffers_before_eviction(bool compress_buffers) {
     ft_compress_buffers_before_eviction = compress_buffers;
 }
 
+
+void toku_ftnode_pe_kh_est_callback(
+    void* ftnode_pv,
+    void* UU(disk_data),
+    long* bytes_freed_estimate,
+    void* UU(write_extraargs)
+    ) 
+{    
+    paranoid_invariant(ftnode_pv != NULL);
+    long bytes_to_free = 0;
+    FTNODE node = static_cast<FTNODE>(ftnode_pv);
+    if (node->height() == 0) {
+	for(int i = 0; i< node->n_children(); i++) {
+	    if(BP_STATE(node, i) == PT_AVAIL) {
+	        BASEMENTNODE bn = BLB(node, i);
+       		bytes_to_free += sizeof(*bn);
+               	bytes_to_free += BLB_DATA(node, i)->get_memory_size();
+ 
+	    } else if(BP_STATE(node, i) == PT_COMPRESSED){
+            	SUB_BLOCK sb = BSB(node, i);
+            	bytes_to_free += sizeof(*sb);
+            	bytes_to_free += sb->compressed_size;
+	    }
+	}
+    }
+    else {
+        for (int i = 0; i < node->n_children(); i++) {    	
+            if(BP_STATE(node,i) == PT_AVAIL) {	 
+                bytes_to_free += get_avail_internal_node_partition_size(node, i);
+	    }
+	    else if(BP_STATE(node, i) == PT_COMPRESSED) {
+	        SUB_BLOCK sb = BSB(node, i);
+    	        bytes_to_free += sizeof(*sb);
+    	        bytes_to_free += sb->compressed_size;
+	    }
+	
+        }
+    }
+    *bytes_freed_estimate = bytes_to_free;
+}
+
 void toku_ftnode_pe_est_callback(
     void* ftnode_pv,
     void* disk_data,
@@ -935,6 +976,83 @@ static void compress_internal_node_partition(FTNODE node, int i, enum toku_compr
     BP_STATE(node,i) = PT_COMPRESSED;
 }
 
+int toku_ftnode_pe_kh_callback(void *ftnode_pv,
+                            PAIR_ATTR UU(old_attr),
+                            void * UU(write_extraargs),
+                            void (*finalize)(PAIR_ATTR new_attr, void *extra),
+                            void *finalize_extra) {
+    FTNODE node = (FTNODE)ftnode_pv;
+    FT ft = (FT)write_extraargs;
+
+    // Hold things we intend to destroy here.
+    // They will be taken care of after finalize().
+    int num_buffers_to_destroy = 0;
+    int num_basements_to_destroy = 0;
+    NONLEAF_CHILDINFO buffers_to_destroy[node->n_children()];
+    BASEMENTNODE basements_to_destroy[node->n_children()];
+    // Don't partially evict dirty nodes
+    assert(!node->dirty());
+    if(node->height() > 0) {
+    	for(int i = 0; i < node->n_children(); i++) {
+	    if(BP_STATE(node, i) == PT_AVAIL){
+	        NONLEAF_CHILDINFO bnc = BNC(node, i);
+                set_BNULL(node, i);
+                BP_STATE(node, i) = PT_ON_DISK;
+                buffers_to_destroy[num_buffers_to_destroy++] = bnc;
+	    } else if(BP_STATE(node, i) == PT_COMPRESSED) {
+	        SUB_BLOCK sb = BSB(node, i);
+                toku_free(sb->compressed_ptr);
+	        toku_free(sb);
+                set_BNULL(node, i);
+                BP_STATE(node, i) = PT_ON_DISK; 
+	    } else {
+                paranoid_invariant(is_BNULL(node, i));
+            }
+        }
+    } else {
+    	for (int i = 0; i < node->n_children(); i++) {
+            // Get rid of compressed stuff no matter what.
+            if (BP_STATE(node, i) == PT_COMPRESSED) {
+                SUB_BLOCK sb = BSB(node, i);
+                toku_free(sb->compressed_ptr);
+	        toku_free(sb);
+                set_BNULL(node, i);
+                BP_STATE(node, i) = PT_ON_DISK;
+            } else if (BP_STATE(node, i) == PT_AVAIL) {
+                    BASEMENTNODE bn = BLB(node, i);
+                    basements_to_destroy[num_basements_to_destroy++] = bn;
+                    // A basement node is being partially evicted.
+                    // This masement node may have had messages applied to it to
+                    // satisfy a query, but was never actually dirtied.
+                    // This message application may have updated the trees
+                    // logical row count. Since these message applications are
+                    // not being persisted, we need undo the logical row count
+                    // adjustments as they may occur again in the future if/when
+                    // the node is re-read from disk for another query or change.
+
+            	    toku_ft_adjust_logical_row_count(ft,
+                                                     -bn->logical_rows_delta);
+         
+                    set_BNULL(node, i);
+                    BP_STATE(node, i) = PT_ON_DISK;
+            } else if (BP_STATE(node, i) == PT_ON_DISK) {
+                continue;
+            } else {
+                abort();
+            }
+        }
+    }   
+    //int height = node->height();
+    PAIR_ATTR new_attr = make_ftnode_pair_attr(node);
+    finalize(new_attr, finalize_extra);
+    for (int i = 0; i < num_basements_to_destroy; i++) {
+        destroy_basement_node(basements_to_destroy[i]);
+    }
+    for (int i = 0; i < num_buffers_to_destroy; i++) {
+        destroy_nonleaf_childinfo(buffers_to_destroy[i]);
+    }
+    return 0; 
+}
 // callback for partially evicting a node
 int toku_ftnode_pe_callback(void *ftnode_pv,
                             PAIR_ATTR old_attr,
@@ -1094,6 +1212,15 @@ static void unsafe_touch_clock(FTNODE node, int i) {
     toku_unsafe_set(&(node->bp())[i].clock_count, static_cast<unsigned char>(1));
 }
 
+static bool is_search_pointed(ft_search *search) {
+  if (search->k &&search->compare ==
+          toku_ft_cursor_compare_set_range &&search->k_bound == nullptr) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 // Callback that states if a partial fetch of the node is necessary
 // Currently, this function is responsible for the following things:
 //  - reporting to the cachetable whether a partial fetch is required (as required by the contract of the callback)
@@ -1145,7 +1272,17 @@ bool toku_ftnode_pf_req_callback(void* ftnode_pv, void* read_extraargs) {
             );
         unsafe_touch_clock(node,bfe->child_to_read);
         // child we want to read is not available, must set retval to true
-        retval = (BP_STATE(node, bfe->child_to_read) != PT_AVAIL);
+        if(node->height() > 0) {
+	    bool is_pointed_search = is_search_pointed(bfe->search);
+            bool is_key_in_node = node->is_key_in_bloom_filter(bfe->search->k);
+	    if(BP_STATE(node, bfe->child_to_read) == PT_AVAIL)
+	    	retval = false;
+	    else
+        	retval =!(is_pointed_search && !is_key_in_node);//neg case
+	} else {
+
+		retval = !(BP_STATE(node, bfe->child_to_read)==PT_AVAIL);
+	}
     }
     else if (bfe->type == ftnode_fetch_prefetch) {
         // makes no sense to have prefetching disabled
@@ -3499,6 +3636,8 @@ CACHETABLE_WRITE_CALLBACK get_write_callbacks_for_node(FT ft) {
     wc.flush_callback = toku_ftnode_flush_callback;
     wc.pe_est_callback = toku_ftnode_pe_est_callback;
     wc.pe_callback = toku_ftnode_pe_callback;
+    wc.pe_kh_callback = toku_ftnode_pe_kh_callback;
+    wc.pe_kh_est_callback = toku_ftnode_pe_kh_est_callback;
     wc.cleaner_callback = toku_ftnode_cleaner_callback;
     wc.clone_callback = toku_ftnode_clone_callback;
     wc.checkpoint_complete_callback = toku_ftnode_checkpoint_complete_callback;
@@ -3562,14 +3701,6 @@ unlock_ftnode_fun (void *v) {
         x->msgs_applied ? make_ftnode_pair_attr(node) : make_invalid_pair_attr()
         );
     assert_zero(r);
-}
-static bool is_search_pointed(ft_search *search) {
-  if (search->k &&search->compare ==
-          toku_ft_cursor_compare_set_range &&search->k_bound == nullptr) {
-    return true;
-  } else {
-    return false;
-  }
 }
 /* search in a node's child */
 static int

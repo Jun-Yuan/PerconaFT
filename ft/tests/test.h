@@ -192,7 +192,16 @@ def_pe_est_callback(
     *bytes_freed_estimate = 0;
     *cost = PE_CHEAP;
 }
-
+static UU() void 
+def_pe_est_kh_callback(
+    void* UU(ftnode_pv),
+    void * UU(disk_data),
+    long* bytes_freed_estimate, 
+    void* UU(write_extraargs)
+    )
+{
+    *bytes_freed_estimate = 7;
+}
 static UU() int 
 def_pe_callback(
     void *ftnode_pv __attribute__((__unused__)), 
@@ -202,6 +211,8 @@ def_pe_callback(
     void *finalize_extra
     )
 {
+
+    //PAIR_ATTR new_attr = make_ftnode_pair_attr(node);
     finalize(bytes_to_free, finalize_extra);
     return 0;
 }
@@ -278,7 +289,9 @@ static UU() CACHETABLE_WRITE_CALLBACK def_write_callback(void* write_extraargs) 
     CACHETABLE_WRITE_CALLBACK wc;
     wc.flush_callback = def_flush;
     wc.pe_est_callback = def_pe_est_callback;
+    wc.pe_kh_est_callback = def_pe_est_kh_callback;
     wc.pe_callback = def_pe_callback;
+    wc.pe_kh_callback = def_pe_callback;
     wc.cleaner_callback = def_cleaner_callback;
     wc.write_extraargs = write_extraargs;
     wc.clone_callback = nullptr;

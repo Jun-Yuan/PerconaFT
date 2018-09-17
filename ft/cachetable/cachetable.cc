@@ -755,6 +755,29 @@ static void cachetable_partial_eviction(void* extra) {
     bjm_remove_background_job(cf->bjm);
 }
 
+static void cachetable_partial_eviction_kh(void* extra) {
+    PAIR p = (PAIR)extra;
+    CACHEFILE cf = p->cachefile;
+
+    if(!p->dirty && (nb_mutex_writers(&p->disk_nb_mutex)==0))
+        p->ev->do_eviction_keep_header(p);
+    else {
+    	pair_list* pl = p->list;
+    	pl->read_pending_exp_lock();
+    	bool for_checkpoint = p->checkpoint_pending;
+    	p->checkpoint_pending = false;
+ 	//pair_lock(p);
+    	if (p->dirty) {
+        //	pair_unlock(p);
+        	cachetable_write_locked_pair(p->ev, p, for_checkpoint);
+        //	pair_lock(p);
+    	}
+	p->ev->do_eviction_keep_header(p);
+	pl->read_pending_exp_unlock();
+    }
+    bjm_remove_background_job(cf->bjm);
+}
+
 void toku_cachetable_swap_pair_values(PAIR old_pair, PAIR new_pair) {
     void* old_value = old_pair->value_data;
     void* new_value = new_pair->value_data;
@@ -792,7 +815,9 @@ void pair_init(PAIR p,
 
     p->flush_callback = write_callback.flush_callback;
     p->pe_callback = write_callback.pe_callback;
+    p->pe_kh_callback = write_callback.pe_kh_callback;
     p->pe_est_callback = write_callback.pe_est_callback;
+    p->pe_kh_est_callback = write_callback.pe_kh_est_callback;
     p->cleaner_callback = write_callback.cleaner_callback;
     p->clone_callback = write_callback.clone_callback;
     p->checkpoint_complete_callback = write_callback.checkpoint_complete_callback;
@@ -4084,10 +4109,39 @@ bool evictor::run_eviction_on_pair(PAIR curr_in_clock) {
         }
     } else {
         toku::context pe_ctx(CTX_FULL_EVICTION);
+        curr_in_clock->value_rwlock.write_lock(true);
+        void *value = curr_in_clock->value_data;
+            void* disk_data = curr_in_clock->disk_data;
+//        FTNODE node = static_cast<FTNODE>(value);
+  //      if(node && node->height() > 0) {     
+	    // call the partial eviction callback
+            void *write_extraargs = curr_in_clock->write_extraargs;
+            long bytes_freed_estimate = 0;
+            curr_in_clock->pe_kh_est_callback(value,
+					      disk_data,
+                                              &bytes_freed_estimate,
+                                              write_extraargs);
+ 	    if (bytes_freed_estimate > 0) {
+                pair_unlock(curr_in_clock);
+                curr_in_clock->size_evicting_estimate = bytes_freed_estimate;
+                toku_mutex_lock(&m_ev_thread_lock);
+                m_size_evicting += bytes_freed_estimate;
+                toku_mutex_unlock(&m_ev_thread_lock);
+                toku_kibbutz_enq(m_kibbutz, cachetable_partial_eviction_kh,
+                                 curr_in_clock);
 
+            } else {
+                curr_in_clock->value_rwlock.write_unlock();
+                pair_unlock(curr_in_clock);
+                bjm_remove_background_job(cf->bjm);
+            }
+		curr_in_clock->count = CLOCK_INITIAL_COUNT;              
+//	} else {
         // responsibility of try_evict_pair to eventually remove background job
         // pair's mutex is still grabbed here
-        this->try_evict_pair(curr_in_clock);
+  //          curr_in_clock->value_rwlock.write_unlock();
+    //        this->try_evict_pair(curr_in_clock);
+//	}
     }
     // regrab the read list lock, because the caller assumes
     // that it is held. The contract requires this.
@@ -4140,6 +4194,27 @@ void evictor::do_partial_eviction(PAIR p) {
     this->decrease_size_evicting(size_evicting_estimate);
 }
 
+//
+// on entry and exit, pair's mutex is not held
+// on exit, PAIR is unpinned
+//
+#if 1
+void evictor::do_eviction_keep_header(PAIR p) {
+    // Copy the old attr
+    PAIR_ATTR old_attr = p->attr;
+    long long size_evicting_estimate = p->size_evicting_estimate;
+
+    struct pair_unpin_with_new_attr_extra extra(this, p);
+    p->pe_kh_callback(p->value_data, old_attr, p->write_extraargs,
+                   // passed as the finalize continuation, which allows the
+                   // pe_callback to unpin the node before doing expensive cleanup
+                   pair_unpin_with_new_attr, &extra);
+
+    // now that the pe_callback (and its pair_unpin_with_new_attr continuation)
+    // have finished, we can safely decrease size_evicting
+    this->decrease_size_evicting(size_evicting_estimate);
+}
+#endif
 //
 // CT lock held on entry
 // background job has been added for p->cachefile on entry

@@ -286,7 +286,8 @@ public:
   QF &bloom_filter() { return _header._filter; }
 
   void create_bloom_filter(uint64_t nslots = 0) {
-    const uint64_t _qbits = 10;
+    const uint64_t _qbits = 10; 
+    //const uint64_t _qbits = 6; 
     const uint64_t _nhashbits = _qbits + 8;
     uint64_t _nslots;
     if (nslots == 0)

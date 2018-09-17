@@ -343,6 +343,17 @@ void toku_ftnode_clone_callback(void* value_data, void** cloned_value_data, long
 void toku_ftnode_checkpoint_complete_callback(void *value_data);
 void toku_ftnode_flush_callback (CACHEFILE cachefile, int fd, BLOCKNUM blocknum, void *ftnode_v, void** UU(disk_data), void *extraargs, PAIR_ATTR size, PAIR_ATTR* new_size, bool write_me, bool keep_me, bool for_checkpoint, bool is_clone);
 int toku_ftnode_fetch_callback (CACHEFILE cachefile, PAIR p, int fd, BLOCKNUM blocknum, uint32_t fullhash, void **ftnode_pv, void** UU(disk_data), PAIR_ATTR *sizep, int*dirty, void*extraargs);
+void toku_ftnode_pe_kh_est_callback(
+    void* ftnode_pv,
+    void * disk_data,
+    long* bytes_freed_estimate,
+    void* UU(write_extraargs)
+    );
+int toku_ftnode_pe_kh_callback(void *ftnode_pv,
+                            PAIR_ATTR old_attr,
+                            void *write_extraargs,
+                            void (*finalize)(PAIR_ATTR new_attr, void *extra),
+                            void *finalize_extra); 
 void toku_ftnode_pe_est_callback(void* ftnode_pv, void* disk_data, long* bytes_freed_estimate, enum partial_eviction_cost *cost, void* write_extraargs);
 int toku_ftnode_pe_callback(void *ftnode_pv, PAIR_ATTR old_attr, void *extraargs,
                             void (*finalize)(PAIR_ATTR new_attr, void *extra), void *finalize_extra);
