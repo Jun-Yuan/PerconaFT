@@ -4129,13 +4129,12 @@ bool evictor::run_eviction_on_pair(PAIR curr_in_clock) {
                 toku_mutex_unlock(&m_ev_thread_lock);
                 toku_kibbutz_enq(m_kibbutz, cachetable_partial_eviction_kh,
                                  curr_in_clock);
-
             } else {
                 curr_in_clock->value_rwlock.write_unlock();
                 pair_unlock(curr_in_clock);
                 bjm_remove_background_job(cf->bjm);
             }
-		curr_in_clock->count = CLOCK_INITIAL_COUNT;              
+	    curr_in_clock->count = CLOCK_INITIAL_COUNT;              
 //	} else {
         // responsibility of try_evict_pair to eventually remove background job
         // pair's mutex is still grabbed here

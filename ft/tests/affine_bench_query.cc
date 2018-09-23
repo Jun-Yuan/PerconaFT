@@ -140,6 +140,7 @@ test_main(int argc, const char *argv[]) {
     r = toku_open_ft_handle(n, 0, &t, nodesize, basementsize, TOKU_NO_COMPRESSION, ct, null_txn, uint64_dbt_cmp); assert(r==0);
     toku_ft_handle_set_fanout(t, fanout);
     toku_ft_set_direct_io(true);
+    random_numbers = (4*1024) /nodeMB;
     uint64_t *array = (uint64_t *)toku_malloc(sizeof(uint64_t) * random_numbers);
     if (array == NULL) {
        fprintf(stderr, "Allocate memory failed\n");
