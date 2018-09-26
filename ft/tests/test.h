@@ -336,6 +336,14 @@ default_parse_args (int argc, const char *argv[]) {
     }
 }
 
+static __attribute__((__unused__)) DBT *
+dbt_init(DBT *dbt, const void *data, uint32_t size) {
+    memset(dbt, 0, sizeof *dbt);
+    dbt->data = (void*)data;
+    dbt->size = size;
+    return dbt;
+}
+
 int test_main(int argc, const char *argv[]);
 
 int
