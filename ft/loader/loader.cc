@@ -3293,8 +3293,8 @@ static void write_nonleaf_node (FTLOADER bl, struct dbout *out, int64_t blocknum
     // TODO: Should be using toku_destroy_ftnode_internals, which should be renamed to toku_ftnode_destroy
     if (node->height() > 0) {
       toku_free(node->children_blocknum());
-      node->destroy_bloom_filter();
     }
+    node->destroy_bloom_filter();
     toku_free(node->bp());
     node->broadcast_list().destroy();
     node->pivotkeys().destroy();

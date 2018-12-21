@@ -286,7 +286,7 @@ public:
   QF &bloom_filter() { return _header._filter; }
 
   void create_bloom_filter(uint64_t nslots = 0) {
-    const uint64_t _qbits = 10; 
+    const uint64_t _qbits = 11; 
     //const uint64_t _qbits = 6; 
     const uint64_t _nhashbits = _qbits + 8;
     uint64_t _nslots;
@@ -351,7 +351,8 @@ public:
     qf_copy(qf, another);
   }
 
-  bool is_key_in_bloom_filter(const DBT *k) {
+  bool is_key_in_bloom_filter(const DBT *UU(k)) {
+#if 0
     size_t size = k->size;
     char *data = (char *)k->data;
     void *key_p = toku_xmalloc(sizeof(size_t) + size * sizeof(char));
@@ -360,6 +361,9 @@ public:
     int r = qf_count_key_value(&_header._filter, (uint64_t)key_p, 0);
     toku_free(key_p);
     return r>0;
+#else
+    return true;
+#endif
   }
 
   void insert_into_bloom_filter(DBT *k) {
@@ -434,7 +438,8 @@ enum pt_state {  // declare this to be packed so that when used below it will
     PT_INVALID = 0,
     PT_ON_DISK = 1,
     PT_COMPRESSED = 2,
-    PT_AVAIL = 3
+    PT_AVAIL = 3,
+    PT_FAKE = 4
 };
 
 enum ftnode_child_tag {
@@ -543,6 +548,7 @@ NONLEAF_CHILDINFO toku_create_empty_nl(void);
 void destroy_basement_node(BASEMENTNODE bn);
 void destroy_nonleaf_childinfo(NONLEAF_CHILDINFO nl);
 void toku_destroy_ftnode_internals(FTNODE node);
+void toku_destroy_ftnode_internals_for_rebalance(FTNODE node);
 void toku_ftnode_free(FTNODE *node);
 bool toku_ftnode_fully_in_memory(FTNODE node);
 void toku_ftnode_assert_fully_in_memory(FTNODE node);

@@ -242,6 +242,7 @@ static void test_serialize_leaf_check_msn(enum ftnode_verify_type bft,
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     sn.broadcast_list().create();
     MALLOC_N(sn.n_children(), sn.bp());
+    sn.create_bloom_filter();
     DBT pivotkey;
     sn.pivotkeys().create_from_dbts(toku_fill_dbt(&pivotkey, "b", 2), 1);
     BP_STATE(&sn, 0) = PT_AVAIL;
@@ -385,6 +386,7 @@ static void test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft,
     sn.dirty() = 1;
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     sn.broadcast_list().create();
+    sn.create_bloom_filter();
     MALLOC_N(sn.n_children(), sn.bp());
     sn.pivotkeys().create_empty();
     for (int i = 0; i < sn.n_children(); ++i) {
@@ -543,6 +545,7 @@ static void test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft,
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     sn.broadcast_list().create();
     XMALLOC_N(sn.n_children(), sn.bp());
+    sn.create_bloom_filter();
     sn.pivotkeys().create_empty();
     for (int i = 0; i < sn.n_children(); ++i) {
         BP_STATE(&sn, i) = PT_AVAIL;
@@ -697,6 +700,7 @@ static void test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft,
     sn.dirty() = 1;
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     sn.broadcast_list().create();
+    sn.create_bloom_filter();
     MALLOC_N(sn.n_children(), sn.bp());
     sn.pivotkeys().create_empty();
     for (int i = 0; i < sn.n_children(); ++i) {
@@ -849,6 +853,7 @@ static void test_serialize_leaf_with_empty_basement_nodes(
     sn.dirty() = 1;
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     sn.broadcast_list().create();
+    sn.create_bloom_filter();
     MALLOC_N(sn.n_children(), sn.bp());
     DBT pivotkeys[6];
     toku_fill_dbt(&pivotkeys[0], "A", 2);
@@ -994,6 +999,7 @@ static void test_serialize_leaf_with_multiple_empty_basement_nodes(
     sn.dirty() = 1;
     sn.oldest_referenced_xid_known() = TXNID_NONE;
     MALLOC_N(sn.n_children(), sn.bp());
+    sn.create_bloom_filter();
     DBT pivotkeys[3];
     toku_fill_dbt(&pivotkeys[0], "A", 2);
     toku_fill_dbt(&pivotkeys[1], "A", 2);

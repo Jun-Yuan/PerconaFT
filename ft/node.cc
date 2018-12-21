@@ -63,9 +63,9 @@ void toku_initialize_empty_ftnode(FTNODE n, BLOCKNUM blocknum, int height, int n
     n->oldest_referenced_xid_known() = TXNID_NONE;
     n->broadcast_list().create();
 
-    if(height > 0) {
+//    if(height > 0) {
         n->create_bloom_filter();
-    }
+//    }
     if (num_children > 0) {
       if (height > 0) {
         XMALLOC_N(num_children, n->children_blocknum());
@@ -117,7 +117,33 @@ void toku_destroy_ftnode_internals(FTNODE node) {
     if (node->height() > 0) {
       if(node->n_children() > 0)
       	toku_free(node->children_blocknum());
-      node->destroy_bloom_filter();
+    }
+    node->destroy_bloom_filter();
+    toku_free(node->bp());
+    node->bp() = NULL;
+}
+void toku_destroy_ftnode_internals_for_rebalance(FTNODE node) {
+    node->pivotkeys().destroy();
+    for (int i = 0; i < node->n_children(); i++) {
+        if (BP_STATE(node,i) == PT_AVAIL) {
+            if (node->height() > 0) {
+                destroy_nonleaf_childinfo(BNC(node,i));
+            } else {
+                paranoid_invariant(BLB_LRD(node, i) == 0);
+                destroy_basement_node(BLB(node, i));
+            }
+        } else if (BP_STATE(node,i) == PT_COMPRESSED) {
+            SUB_BLOCK sb = BSB(node,i);
+            toku_free(sb->compressed_ptr);
+            toku_free(sb);
+        } else {
+            paranoid_invariant(is_BNULL(node, i));
+        }
+        set_BNULL(node, i);
+    }
+    if (node->height() > 0) {
+      if(node->n_children() > 0)
+      	toku_free(node->children_blocknum());
     }
     toku_free(node->bp());
     node->bp() = NULL;
@@ -694,7 +720,8 @@ toku_apply_ancestors_messages_to_node (
                         node->oldest_referenced_xid_known(),
                         true);
     if (!node->dirty() && child_to_read >= 0) {
-        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
+        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL || 
+			   BP_STATE(node, child_to_read) == PT_FAKE);
         apply_ancestors_messages_to_bn(
             t,
             node,
@@ -713,7 +740,7 @@ toku_apply_ancestors_messages_to_node (
         // allows the cleaner thread to just pick an internal node and flush it
         // as opposed to being forced to start from the root.
         for (int i = 0; i < node->n_children(); i++) {
-            if (BP_STATE(node, i) != PT_AVAIL) { continue; }
+            if (BP_STATE(node, i) != PT_AVAIL && BP_STATE(node,i)!= PT_FAKE) { continue; }
             apply_ancestors_messages_to_bn(
                 t,
                 node,
@@ -828,7 +855,8 @@ bool toku_ft_leaf_needs_ancestors_messages(
     bool needs_ancestors_messages = false;
     // child_to_read may be -1 in test cases
     if (!node->dirty() && child_to_read >= 0) {
-        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
+        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL || 
+		           BP_STATE(node, child_to_read) == PT_FAKE);
         needs_ancestors_messages = bn_needs_ancestors_messages(
             ft,
             node,
@@ -840,7 +868,8 @@ bool toku_ft_leaf_needs_ancestors_messages(
     }
     else {
         for (int i = 0; i < node->n_children(); ++i) {
-            if (BP_STATE(node, i) != PT_AVAIL) { continue; }
+            if (BP_STATE(node, i) != PT_AVAIL &&
+		BP_STATE(node, i) != PT_FAKE) { continue; }
             needs_ancestors_messages = bn_needs_ancestors_messages(
                 ft,
                 node,
@@ -861,7 +890,7 @@ cleanup:
 void toku_ft_bn_update_max_msn(FTNODE node, MSN max_msn_applied, int child_to_read) {
     invariant(node->height() == 0);
     if (!node->dirty() && child_to_read >= 0) {
-        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
+        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL || BP_STATE(node, child_to_read) == PT_FAKE);
         BASEMENTNODE bn = BLB(node, child_to_read);
         if (max_msn_applied.msn > bn->max_msn_applied.msn) {
             // see comment below
@@ -1062,7 +1091,7 @@ void toku_ftnode_leaf_rebalance(FTNODE node, unsigned int basementnodesize) {
         old_bns[i] = toku_detach_bn(node, i);
     }
     // Now destroy the old basements, but do not destroy leaves
-    toku_destroy_ftnode_internals(node);
+    toku_destroy_ftnode_internals_for_rebalance(node);
 
     // now reallocate pieces and start filling them in
     invariant(num_children > 0);
@@ -2277,6 +2306,9 @@ void toku_ft_leaf_apply_msg(
                                  : toku_ftnode_which_child(node, msg.kdbt(), cmp));
         BASEMENTNODE bn = BLB(node, childnum);
         if (msg.msn().msn > bn->max_msn_applied.msn) {
+            DBT key;
+            toku_fill_dbt(&key, msg.kdbt()->data, msg.kdbt()->size);
+	    node->insert_into_bloom_filter(&key);
             bn->max_msn_applied = msg.msn();
             toku_ft_bn_apply_msg(
                 cmp,

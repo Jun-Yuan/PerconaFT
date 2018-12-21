@@ -690,7 +690,7 @@ struct add_bnc_msgs_to_filter {
   };
 };
 
-static void rebuild_bloom_filter_for_split(FTNODE UU(node)) {
+static void rebuild_nonleaf_bloom_filter_for_split(FTNODE UU(node)) {
   node->reset_bloom_filter();
   for (int i = 0; i < node->n_children(); i++) {
     NONLEAF_CHILDINFO bnc = BNC(node, i);
@@ -699,6 +699,22 @@ static void rebuild_bloom_filter_for_split(FTNODE UU(node)) {
   }
 }
 
+static void rebuild_leaf_bloom_filter_for_split(FTNODE node) {
+  node->reset_bloom_filter();
+  for (int i = 0; i < node->n_children(); i++) {
+    BASEMENTNODE bn = BLB(node, i);
+    for(uint32_t j = 0; j < bn->data_buffer.num_klpairs(); j++) {
+        void * keyp = NULL;
+        uint32_t keylen = 0;
+        LEAFENTRY leaf_entry = NULL ;
+        int r = bn->data_buffer.fetch_klpair(j, &leaf_entry, &keylen, &keyp);
+        assert_zero(r);
+        DBT key;
+        toku_fill_dbt(&key, keyp, keylen);
+	node->insert_into_bloom_filter(&key);         
+    }
+  }
+}
 static void update_broadcast_list_for_split(FTNODE node) {
   message_buffer temp;
   temp.create();
@@ -726,8 +742,11 @@ static void ftnode_finalize_split(FTNODE node, FTNODE B, MSN max_msn_applied_to_
     if (node->height() > 0) {
       update_broadcast_list_for_split(node);
       update_broadcast_list_for_split(B);
-      rebuild_bloom_filter_for_split(node);
-      rebuild_bloom_filter_for_split(B);
+      rebuild_nonleaf_bloom_filter_for_split(node);
+      rebuild_nonleaf_bloom_filter_for_split(B);
+    } else {
+      rebuild_leaf_bloom_filter_for_split(node);
+      rebuild_leaf_bloom_filter_for_split(B);
     }
 }
 
@@ -1160,6 +1179,10 @@ flush_this_child(
     destroy_nonleaf_childinfo(bnc);
 }
 
+static void update_bloom_filter_for_merge(FTNODE a, FTNODE b) {
+  a->merge_bloom_filter_with(&b->bloom_filter());
+}
+
 static void
 merge_leaf_nodes(FTNODE a, FTNODE b)
 {
@@ -1227,6 +1250,7 @@ merge_leaf_nodes(FTNODE a, FTNODE b)
 
     // now that all the data has been moved from b to a, we can destroy the data in b
     a->n_children() = num_children;
+    update_bloom_filter_for_merge(a, b);
     b->pivotkeys().destroy();
     b->n_children() = 0;
 }
@@ -1290,9 +1314,6 @@ static void update_broadcast_for_merge(FTNODE a, FTNODE b) {
   a->broadcast_list().merge_with(b->broadcast_list());
 }
 
-static void update_bloom_filter_for_merge(FTNODE a, FTNODE b) {
-  a->merge_bloom_filter_with(&b->bloom_filter());
-}
 static void
 maybe_merge_pinned_nonleaf_nodes(
     const DBT *parent_splitk,

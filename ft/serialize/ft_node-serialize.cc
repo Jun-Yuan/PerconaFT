@@ -428,8 +428,8 @@ serialize_ftnode_info_size(FTNODE node)
     if (node->height() > 0) {
         retval += node->n_children()*8; // child blocknum's
         retval += (4 + node->broadcast_list().buffer_size_in_use());
-        retval += node->bloom_filter_size();
     }
+    retval += node->bloom_filter_size();
     retval += 4; // checksum
     return retval;
 }
@@ -446,8 +446,8 @@ static uint32_t serialize_ftnode_info_weighted_size(FTNODE node) {
   if (node->height() > 0) {
     retval += node->n_children() * 8; // child blocknum's
     retval += (4 + node->broadcast_list().buffer_weighted_size_in_use());
-    retval += node->bloom_filter_size();
   }
+  retval += node->bloom_filter_size();
   retval += 4; // checksum
   return retval;
 }
@@ -473,8 +473,8 @@ static void serialize_ftnode_info(FTNODE node, SUB_BLOCK sb) {
             wbuf_nocrc_BLOCKNUM(&wb, BP_BLOCKNUM(node,i));
         }
         node->broadcast_list().serialize_to_wbuf(&wb);
-        node->serialize_bloom_filter_to_wbuf(&wb);
     }
+    node->serialize_bloom_filter_to_wbuf(&wb);
     uint32_t end_to_end_checksum = toku_x1764_memory(sb->uncompressed_ptr, wbuf_get_woffset(&wb));
     wbuf_nocrc_int(&wb, end_to_end_checksum);
     invariant(wb.ndone == wb.size);
@@ -1306,8 +1306,8 @@ static int deserialize_ftnode_info(struct sub_block *sb, FTNODE node) {
     node->height() = rbuf_int(&rb);
     if (node->height() > 0) {
       XMALLOC_N(node->n_children(), node->children_blocknum()); 
-      node->create_bloom_filter();
     }
+    node->create_bloom_filter();
     if (node->layout_version_read_from_disk() < FT_LAYOUT_VERSION_19) {
         (void) rbuf_int(&rb); // optimized_for_upgrade
     }
@@ -1339,10 +1339,10 @@ static int deserialize_ftnode_info(struct sub_block *sb, FTNODE node) {
           &rb, nullptr, nullptr, // fresh_offsets, nfresh,
           nullptr, nullptr,      // stale_offsets, nstale,
           nullptr, nullptr);     // broadcast_offsets, nbroadcast
-      char nodename[1024];
-      sprintf(nodename, "Blocknum[%" PRIu64 "]", node->blocknum().b);
-      node->deserialize_bloom_filter_from_rbuf(&rb, nodename);
-    }
+    }    
+    char nodename[1024];
+    sprintf(nodename, "Blocknum[%" PRIu64 "]", node->blocknum().b);
+    node->deserialize_bloom_filter_from_rbuf(&rb, nodename);
     // make sure that all the data was read
     if (data_size != rb.ndone) {
         fprintf(
@@ -1397,7 +1397,7 @@ update_bfe_using_ftnode(FTNODE node, ftnode_fetch_extra *bfe)
             node,
             bfe->search
             );
-        if (node->height() > 0 && is_search_pointed(bfe->search)&&
+        if (is_search_pointed(bfe->search)&&
             !node->is_key_in_bloom_filter(bfe->search->k))
           // if (!bf_lookup(node, bfe->child_to_read, bfe->search->k))
           bfe->type = ftnode_fetch_none;
@@ -1440,6 +1440,11 @@ setup_partitions_using_bfe(FTNODE node,
     //printf("node height %d, blocknum %" PRId64 ", type %d lc %d rc %d\n", node->height, node->blocknum.b, bfe->type, lc, rc);
     for (int i = 0; i < node->n_children(); i++) {
         BP_INIT_UNTOUCHED_CLOCK(node,i);
+	if(node->height() == 0 && 
+	   i == bfe->child_to_read && 
+	   bfe->type == ftnode_fetch_none) {
+		BP_STATE(node, i) = PT_FAKE;
+        }
         if (data_in_memory) {
             BP_STATE(node, i) = ((bfe->wants_child_available(i) || (lc <= i && i <= rc))
                                  ? PT_AVAIL : PT_COMPRESSED);
@@ -1452,6 +1457,9 @@ setup_partitions_using_bfe(FTNODE node,
         case PT_AVAIL:
             setup_available_ftnode_partition(node, i);
             BP_TOUCH_CLOCK(node,i);
+            break;
+        case PT_FAKE:
+            setup_available_ftnode_partition(node, i);
             break;
         case PT_COMPRESSED:
             set_BSB(node, i, sub_block_creat());
@@ -1958,8 +1966,8 @@ cleanup:
             toku_free(node->bp());
             if (node->height() > 0) {
               toku_free(node->children_blocknum());
-              node->destroy_bloom_filter();
 	    }
+            node->destroy_bloom_filter();
             toku_free(node);
         }
     }
@@ -2624,6 +2632,7 @@ static int deserialize_ftnode_from_rbuf(FTNODE *ftnode,
         case PT_INVALID: // this is really bad
         case PT_ON_DISK: // it's supposed to be in memory.
             abort();
+        case PT_FAKE: ;
         }
     }
     *ftnode = node;
@@ -2646,8 +2655,8 @@ cleanup:
           toku_free(node->bp());
           if (node->height() > 0) {
             toku_free(node->children_blocknum());
-            node->destroy_bloom_filter();
           }
+          node->destroy_bloom_filter();
           toku_free(node);
         }
     }

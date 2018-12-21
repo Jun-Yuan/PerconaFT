@@ -153,7 +153,7 @@ doit (int state) {
     r = toku_testsetup_root(t, node_root);
     assert(r==0);
 
-    char dummy_val[NODESIZE/2-50];
+    char dummy_val[NODESIZE/2-500];
     memset(dummy_val, 0, sizeof(dummy_val));
     r = toku_testsetup_insert_to_leaf(
         t,

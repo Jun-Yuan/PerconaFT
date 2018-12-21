@@ -118,8 +118,8 @@ setup_ftnode_partitions(struct ftnode *node, int n_children, const MSN msn, size
   MALLOC_N(node->n_children(), node->bp());
   if (node->height() > 0) {
     XMALLOC_N(node->n_children(), node->children_blocknum());
-    node->create_bloom_filter();
   }
+  node->create_bloom_filter();
   for (int bn = 0; bn < node->n_children(); ++bn) {
     BP_STATE(node, bn) = PT_AVAIL;
     set_BLB(node, bn, toku_create_empty_bn());

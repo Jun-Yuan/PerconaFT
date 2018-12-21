@@ -665,9 +665,10 @@ void toku_ftnode_clone_callback(void *value_data,
              node->n_children() *
                  sizeof((cloned_node->children_blocknum())[0]));
       cloned_node->broadcast_list().clone(&node->broadcast_list());
-      cloned_node->create_bloom_filter(node->bloom_filter().metadata->nslots);
-      cloned_node->clone_bloom_filter(&node->bloom_filter());
     }
+    cloned_node->create_bloom_filter(node->bloom_filter().metadata->nslots);
+    cloned_node->clone_bloom_filter(&node->bloom_filter());
+
     XMALLOC_N(node->n_children(), cloned_node->bp());
     // clone pivots
     cloned_node->pivotkeys().create_from_pivot_keys(node->pivotkeys());
@@ -1272,17 +1273,24 @@ bool toku_ftnode_pf_req_callback(void* ftnode_pv, void* read_extraargs) {
             );
         unsafe_touch_clock(node,bfe->child_to_read);
         // child we want to read is not available, must set retval to true
-        if(node->height() > 0) {
+        //if(node->height() > 0) {
 	    bool is_pointed_search = is_search_pointed(bfe->search);
             bool is_key_in_node = node->is_key_in_bloom_filter(bfe->search->k);
 	    if(BP_STATE(node, bfe->child_to_read) == PT_AVAIL)
 	    	retval = false;
-	    else
+	    else {
         	retval =!(is_pointed_search && !is_key_in_node);//neg case
-	} else {
+		if(node->height() == 0 && !retval) {
+			BP_STATE(node, bfe->child_to_read) = PT_FAKE;
+			set_BLB(node, bfe->child_to_read, toku_create_empty_bn());
+        		BLB_MAX_MSN_APPLIED(node, bfe->child_to_read) = node->max_msn_applied_to_node_on_disk();
+ 
+		}
+	    }
+//	} else {
 
-		retval = !(BP_STATE(node, bfe->child_to_read)==PT_AVAIL);
-	}
+//		retval = !(BP_STATE(node, bfe->child_to_read)==PT_AVAIL);
+//	}
     }
     else if (bfe->type == ftnode_fetch_prefetch) {
         // makes no sense to have prefetching disabled
@@ -3906,6 +3914,7 @@ ft_search_node(
     // At this point, we must have the necessary partition available to continue the search
     //
     assert(BP_STATE(node,child_to_search) == PT_AVAIL ||
+	BP_STATE(node, child_to_search) == PT_FAKE || 
 	BP_STATE(node, child_to_search) == PT_ON_DISK);
     const pivot_bounds next_bounds = bounds.next_bounds(node, child_to_search);
     if (node->height() > 0) {
@@ -3934,6 +3943,12 @@ ft_search_node(
             ftcursor,
             can_bulk_fetch
             );
+	if(BP_STATE(node, child_to_search) == PT_FAKE){
+		assert(!node->is_key_in_bloom_filter(search->k));
+		destroy_basement_node(BLB(node, child_to_search));
+                set_BNULL(node, child_to_search);
+		BP_STATE(node, child_to_search) = PT_ON_DISK;
+	}
     }
     if (r == 0) {
         return r; //Success

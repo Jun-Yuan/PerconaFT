@@ -132,9 +132,9 @@ test_main(int argc, const char *argv[]) {
     basementsize = nodesize/fanout;
 
 
-    char default_file_name[30] = "affine_benchmark_data";
-    char secondary_file_name[50] = "affine_benchmark_data_";
-    sprintf(secondary_file_name+strlen("affine_benchmark_data_"), "%lf", nodeMB);
+    char default_file_name[50] = "./negative/affine_benchmark_data";
+    char secondary_file_name[100] = "./negative/affine_benchmark_data_";
+    sprintf(secondary_file_name+strlen("./negative/affine_benchmark_data_"), "%lf", nodeMB);
     
     char * n = does_file_exist(secondary_file_name)? secondary_file_name : default_file_name;		
 
@@ -142,7 +142,7 @@ test_main(int argc, const char *argv[]) {
 
     int r;
     toku_cachetable_create(&ct, 0, ZERO_LSN, nullptr);
-    //toku_cachetable_create(&ct, 12*1024*1024, ZERO_LSN, nullptr);
+    //toku_cachetable_create(&ct, 16*1024*1024, ZERO_LSN, nullptr);
     r = toku_open_ft_handle(n, 0, &t, nodesize, basementsize, TOKU_NO_COMPRESSION, ct, null_txn, uint64_dbt_cmp); assert(r==0);
     toku_ft_handle_set_fanout(t, fanout);
     toku_ft_set_direct_io(true);

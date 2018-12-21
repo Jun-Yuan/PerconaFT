@@ -122,11 +122,11 @@ int test_main(int argc, const char *argv[]) {
          valsize / 1024, B, fanout);
 
   // set up the data file
-  const char *n = "affine_benchmark_data";
+  const char *n = "./negative/affine_benchmark_data";
   int r;
   unlink(n);
-  //toku_cachetable_create(&ct, 1024*1024*1024, ZERO_LSN, nullptr);
-  toku_cachetable_create(&ct, 0, ZERO_LSN, nullptr);
+  toku_cachetable_create(&ct, 1024*1024*1024, ZERO_LSN, nullptr);
+  //toku_cachetable_create(&ct, 0, ZERO_LSN, nullptr);
   r = toku_open_ft_handle(n, 1, &t, nodesize, basementsize, TOKU_NO_COMPRESSION,
                           ct, null_txn, uint64_dbt_cmp);
   assert(r == 0);
